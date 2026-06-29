@@ -5,6 +5,7 @@ key phrases, and named entities using **Azure AI Language**, deployed on
 **Azure Static Web Apps** (free tier) with a **Python** Azure Function as the
 backend.
 
+
 ```
 review-analyser/
 ├── src/
