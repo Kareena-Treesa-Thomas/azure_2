@@ -1,13 +1,12 @@
 import json
 import logging
 import os
+import time
 import urllib.error
 import urllib.request
 
 import azure.functions as func
 
-# Read these from Azure environment variables / application settings —
-# never hard-code the key here.
 ENDPOINT = os.environ.get("LANGUAGE_ENDPOINT", "").rstrip("/")
 KEY = os.environ.get("LANGUAGE_KEY", "")
 
@@ -19,7 +18,7 @@ MAX_CHARS = 5000
 def main(req: func.HttpRequest) -> func.HttpResponse:
     endpoint = os.environ.get("LANGUAGE_ENDPOINT", "").rstrip("/")
     key = os.environ.get("LANGUAGE_KEY", "")
-    if not endpoint or not key :
+    if not endpoint or not key:
         return _json_response(
             {"error": "Server is missing LANGUAGE_ENDPOINT / LANGUAGE_KEY environment variables."},
             500,
@@ -37,23 +36,46 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         return _json_response({"error": f"Text must be {MAX_CHARS} characters or fewer."}, 400)
 
     try:
-        sentiment_doc = _call_language("SentimentAnalysis", text)["results"]["documents"][0]
-        keyphrase_doc = _call_language("KeyPhraseExtraction", text)["results"]["documents"][0]
-        entity_doc = _call_language("EntityRecognition", text)["results"]["documents"][0]
+        sentiment_doc  = _call_language("SentimentAnalysis",    text)["results"]["documents"][0]
+        keyphrase_doc  = _call_language("KeyPhraseExtraction",  text)["results"]["documents"][0]
+        entity_doc     = _call_language("EntityRecognition",    text)["results"]["documents"][0]
+        language_doc   = _call_language("LanguageDetection",    text)["results"]["documents"][0]
+        pii_doc        = _call_language("PiiEntityRecognition", text)["results"]["documents"][0]
     except Exception:
         logging.exception("Azure AI Language call failed")
         return _json_response(
             {"error": "Azure AI Language request failed. Check key/endpoint/quota."}, 502
         )
 
+    # Abstractive summarization uses a separate async jobs API
+    summary_text = ""
+    try:
+        summary_text = _call_summarization(text)
+    except Exception:
+        logging.exception("Summarization call failed — continuing without it")
+        summary_text = "(Summarization unavailable)"
+
+    detected_lang = language_doc.get("detectedLanguage", {})
+
     result = {
-        "sentiment": sentiment_doc["sentiment"],  # positive | negative | neutral | mixed
+        # --- original 3 features ---
+        "sentiment": sentiment_doc["sentiment"],
         "confidenceScores": sentiment_doc["confidenceScores"],
         "keyPhrases": keyphrase_doc.get("keyPhrases", []),
         "entities": [
             {"text": e["text"], "category": e["category"]}
             for e in entity_doc.get("entities", [])
         ],
+        # --- 3 new features ---
+        "language": detected_lang.get("name", "Unknown"),
+        "languageIso": detected_lang.get("iso6391Name", "??"),
+        "languageConfidence": detected_lang.get("confidenceScore", 0),
+        "redactedText": pii_doc.get("redactedText", text),
+        "piiEntities": [
+            {"text": e["text"], "category": e["category"]}
+            for e in pii_doc.get("entities", [])
+        ],
+        "summary": summary_text,
     }
     return _json_response(result, 200)
 
@@ -81,6 +103,61 @@ def _call_language(kind: str, text: str) -> dict:
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", "ignore")
         raise RuntimeError(f"{kind} failed: {exc.code} {detail}") from exc
+
+
+def _call_summarization(text: str) -> str:
+    """Submit an abstractive summarization job and poll until done."""
+    submit_url = f"{ENDPOINT}/language/analyze-text/jobs?api-version={API_VERSION}"
+    payload = {
+        "displayName": "summarize",
+        "analysisInput": {
+            "documents": [{"id": "1", "language": "en", "text": text}]
+        },
+        "tasks": [{
+            "kind": "AbstractiveSummarization",
+            "taskName": "summary",
+            "parameters": {"sentenceCount": 3}
+        }]
+    }
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        submit_url,
+        data=data,
+        headers={
+            "Content-Type": "application/json",
+            "Ocp-Apim-Subscription-Key": KEY,
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=TIMEOUT_SECONDS) as resp:
+            op_location = resp.headers.get("operation-location")
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", "ignore")
+        raise RuntimeError(f"Summarization submit failed: {exc.code} {detail}") from exc
+
+    if not op_location:
+        raise RuntimeError("No operation-location header returned from summarization submit.")
+
+    # Poll every 2 seconds, up to 20 attempts (40s)
+    for _ in range(20):
+        time.sleep(2)
+        poll_req = urllib.request.Request(
+            op_location,
+            headers={"Ocp-Apim-Subscription-Key": KEY},
+            method="GET",
+        )
+        with urllib.request.urlopen(poll_req, timeout=TIMEOUT_SECONDS) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+
+        status = result.get("status")
+        if status == "succeeded":
+            summaries = result["tasks"]["items"][0]["results"]["documents"][0]["summaries"]
+            return " ".join(s["text"] for s in summaries)
+        if status == "failed":
+            raise RuntimeError("Summarization job failed on Azure side.")
+
+    raise RuntimeError("Summarization timed out.")
 
 
 def _json_response(payload: dict, status: int) -> func.HttpResponse:

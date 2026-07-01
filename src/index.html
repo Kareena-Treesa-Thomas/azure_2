@@ -186,7 +186,7 @@
     margin-top: -8px;
   }
 
-  /* ---------- Results sheet ---------- */
+  /* ---------- Results sheet (original) ---------- */
   .results-sheet{
     display: grid;
     grid-template-columns: 120px 1fr;
@@ -251,6 +251,113 @@
   .entity-chip .cat{ color: var(--highlight); margin-left: 4px; }
   .entity-empty{ color: var(--ink-soft); }
 
+  /* ---------- NEW sheets (same paper style) ---------- */
+  .divider{
+    border: none;
+    border-top: 1px dashed var(--paper-line);
+    margin: 18px 0;
+  }
+
+  /* Language */
+  .lang-row{
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 4px;
+  }
+  .lang-name{
+    font-family: var(--display);
+    font-size: 1.6rem;
+    color: var(--ink);
+  }
+  .lang-iso{
+    font-family: var(--mono);
+    font-size: 11px;
+    background: var(--board);
+    color: var(--chalk);
+    padding: 3px 8px;
+    border-radius: 3px;
+    letter-spacing: 0.08em;
+  }
+  .lang-conf{
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin-left: auto;
+  }
+  .lang-bar-wrap{
+    margin-top: 10px;
+    height: 6px;
+    background: var(--paper-line);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .lang-bar-fill{
+    height: 100%;
+    background: var(--pos);
+    border-radius: 3px;
+    transition: width 0.5s ease;
+    width: 0%;
+  }
+
+  /* PII */
+  .pii-sublabel{
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin: 14px 0 5px;
+  }
+  .pii-sublabel:first-child{ margin-top: 4px; }
+  .pii-box{
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    line-height: 1.65;
+    padding: 10px 12px;
+    border-radius: var(--radius);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .pii-original{
+    background: rgba(30,59,47,0.05);
+    border: 1px solid var(--paper-line);
+    color: var(--ink-soft);
+  }
+  .pii-redacted{
+    background: rgba(182,68,47,0.07);
+    border: 1px solid rgba(182,68,47,0.2);
+    color: var(--ink);
+  }
+  .pii-chips{ display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+  .pii-chip{
+    font-family: var(--mono);
+    font-size: 11px;
+    background: var(--board);
+    color: var(--neg);
+    border-radius: 3px;
+    padding: 3px 8px;
+  }
+  .pii-chip .pcat{ color: var(--chalk-dim); margin-left: 4px; }
+  .no-pii{
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--pos);
+    margin-top: 4px;
+  }
+
+  /* Summary */
+  .summary-text{
+    font-size: 1rem;
+    line-height: 1.72;
+    color: var(--ink);
+    border-left: 3px solid var(--rule);
+    padding-left: 14px;
+    margin-top: 4px;
+    font-style: italic;
+  }
+
+  /* ---------- Footer ---------- */
   .foot{
     text-align:center;
     padding: 18px 20px 32px;
@@ -283,7 +390,6 @@
       <p class="eyebrow">Azure AI Language · Text Analytics demo</p>
       <h1 class="typewriter-title">Review Analyser</h1>
       <p class="chalk-note">paste a review &mdash; get it graded in real time</p>
-
       <ol class="steps">
         <li><span class="chalk-num">1</span> Paste any review, tweet, or comment</li>
         <li><span class="chalk-num">2</span> We send it to Azure AI Language</li>
@@ -293,10 +399,11 @@
   </header>
 
   <main class="desk">
+
+    <!-- INPUT -->
     <section class="sheet input-sheet">
       <label for="reviewInput" class="sheet-label">Paste the review</label>
       <textarea id="reviewInput" rows="8" placeholder="e.g. &ldquo;The battery life is incredible but the camera app crashes constantly. Customer support at Acme was friendly though.&rdquo;"></textarea>
-
       <div class="sheet-footer">
         <span id="charCount" class="mono small">0 characters</span>
         <button id="analyzeBtn" class="stamp-button">
@@ -306,6 +413,7 @@
       <p id="errorMsg" class="error-msg" hidden></p>
     </section>
 
+    <!-- ORIGINAL: Sentiment + Key Phrases + Entities -->
     <section id="resultsSheet" class="sheet results-sheet" hidden>
       <div class="margin-rail">
         <div id="stampBadge" class="stamp" aria-hidden="true">PENDING</div>
@@ -318,38 +426,71 @@
           </div>
         </div>
       </div>
-
       <div class="page-body">
         <p class="sheet-label">marked-up copy</p>
         <p id="markedText" class="marked-text"></p>
-
         <div class="entities-block">
           <p class="sheet-label">named entities</p>
           <div id="entityList" class="entity-list mono small"></div>
         </div>
       </div>
     </section>
+    <!-- NEW: Language Detection -->
+    <section id="langSheet" class="sheet" hidden>
+      <p class="sheet-label">🌐 language detected</p>
+      <div class="lang-row">
+        <span id="langNameEl" class="lang-name"></span>
+        <span id="langIsoEl"  class="lang-iso"></span>
+        <span id="langConfEl" class="lang-conf"></span>
+      </div>
+      <div class="lang-bar-wrap">
+        <div id="langBarFill" class="lang-bar-fill"></div>
+      </div>
+    </section>
+
+    <!-- NEW: PII Redaction -->
+    <section id="piiSheet" class="sheet" hidden>
+      <p class="sheet-label">🛡️ pii redaction</p>
+      <div id="piiContent"></div>
+    </section>
+
+    <!-- NEW: Abstractive Summary -->
+    <section id="summSheet" class="sheet" hidden>
+      <p class="sheet-label">📄 abstractive summary</p>
+      <p id="summText" class="summary-text"></p>
+    </section>
 
     <p id="loadingMsg" class="loading-msg mono small" hidden>marking up your copy…</p>
+
   </main>
 
   <footer class="foot">
-    <p class="mono tiny">Built on Azure AI Language &middot; sentiment, key phrases &amp; entities &middot; Python backend on Azure</p>
+    <p class="mono tiny">Built on Azure AI Language &middot; sentiment · key phrases · entities · language detection · PII redaction · summarization &middot; Python backend on Azure</p>
   </footer>
 
 <script>
-  const textarea = document.getElementById('reviewInput');
-  const charCount = document.getElementById('charCount');
-  const analyzeBtn = document.getElementById('analyzeBtn');
-  const errorMsg = document.getElementById('errorMsg');
-  const loadingMsg = document.getElementById('loadingMsg');
+  const textarea     = document.getElementById('reviewInput');
+  const charCount    = document.getElementById('charCount');
+  const analyzeBtn   = document.getElementById('analyzeBtn');
+  const errorMsg     = document.getElementById('errorMsg');
+  const loadingMsg   = document.getElementById('loadingMsg');
   const resultsSheet = document.getElementById('resultsSheet');
-  const stampBadge = document.getElementById('stampBadge');
-  const markedText = document.getElementById('markedText');
-  const entityList = document.getElementById('entityList');
-  const barPos = document.getElementById('barPos');
-  const barNeu = document.getElementById('barNeu');
-  const barNeg = document.getElementById('barNeg');
+  const stampBadge   = document.getElementById('stampBadge');
+  const markedText   = document.getElementById('markedText');
+  const entityList   = document.getElementById('entityList');
+  const barPos       = document.getElementById('barPos');
+  const barNeu       = document.getElementById('barNeu');
+  const barNeg       = document.getElementById('barNeg');
+
+  const langSheet    = document.getElementById('langSheet');
+  const langNameEl   = document.getElementById('langNameEl');
+  const langIsoEl    = document.getElementById('langIsoEl');
+  const langConfEl   = document.getElementById('langConfEl');
+  const langBarFill  = document.getElementById('langBarFill');
+  const piiSheet     = document.getElementById('piiSheet');
+  const piiContent   = document.getElementById('piiContent');
+  const summSheet    = document.getElementById('summSheet');
+  const summText     = document.getElementById('summText');
 
   textarea.addEventListener('input', () => {
     charCount.textContent = `${textarea.value.length} characters`;
@@ -371,6 +512,10 @@
     }
 
     setLoading(true);
+    resultsSheet.hidden = true;
+    langSheet.hidden    = true;
+    piiSheet.hidden     = true;
+    summSheet.hidden    = true;
 
     try {
       const res = await fetch('/api/analyze', {
@@ -389,7 +534,6 @@
     } catch (err) {
       errorMsg.textContent = `Could not grade this review: ${err.message}`;
       errorMsg.hidden = false;
-      resultsSheet.hidden = true;
     } finally {
       setLoading(false);
     }
@@ -397,20 +541,23 @@
 
   function setLoading(isLoading) {
     analyzeBtn.disabled = isLoading;
-    loadingMsg.hidden = !isLoading;
+    loadingMsg.hidden   = !isLoading;
     analyzeBtn.querySelector('.btn-label').textContent = isLoading
       ? 'Grading…'
       : 'Grade this review';
   }
 
   function renderResults(originalText, data) {
-    const { sentiment, confidenceScores, keyPhrases, entities } = data;
+    const { sentiment, confidenceScores, keyPhrases, entities,
+            language, languageIso, languageConfidence,
+            redactedText, piiEntities, summary } = data;
 
+    /* ---- original 3 ---- */
     stampBadge.textContent = sentiment.toUpperCase();
-    stampBadge.className = 'stamp ' + sentiment.toLowerCase();
+    stampBadge.className   = 'stamp ' + sentiment.toLowerCase();
 
     const pos = Math.round((confidenceScores.positive || 0) * 100);
-    const neu = Math.round((confidenceScores.neutral || 0) * 100);
+    const neu = Math.round((confidenceScores.neutral  || 0) * 100);
     const neg = Math.round((confidenceScores.negative || 0) * 100);
     barPos.style.width = pos + '%';
     barNeu.style.width = neu + '%';
@@ -418,29 +565,55 @@
 
     markedText.innerHTML = highlightPhrases(originalText, keyPhrases || []);
 
-    if (entities && entities.length) {
-      entityList.innerHTML = entities
-        .map(e => `<span class="entity-chip">${escapeHtml(e.text)}<span class="cat">${escapeHtml(e.category)}</span></span>`)
-        .join('');
-    } else {
-      entityList.innerHTML = '<span class="entity-empty">no named entities found</span>';
-    }
+    entityList.innerHTML = (entities && entities.length)
+      ? entities.map(e =>
+          `<span class="entity-chip">${escapeHtml(e.text)}<span class="cat">${escapeHtml(e.category)}</span></span>`
+        ).join('')
+      : '<span class="entity-empty">no named entities found</span>';
 
     resultsSheet.hidden = false;
+
+    /* ---- language detection ---- */
+    langNameEl.textContent = language || 'Unknown';
+    langIsoEl.textContent  = languageIso || '??';
+    const lp = Math.round((languageConfidence || 0) * 100);
+    langConfEl.textContent   = lp + '% confidence';
+    langBarFill.style.width  = lp + '%';
+    langSheet.hidden = false;
+
+    /* ---- PII redaction ---- */
+    if (!(piiEntities && piiEntities.length)) {
+      piiContent.innerHTML = '<p class="no-pii">✓ No personally identifiable information detected.</p>';
+    } else {
+      piiContent.innerHTML = `
+        <p class="pii-sublabel">original</p>
+        <div class="pii-box pii-original">${escapeHtml(originalText)}</div>
+        <p class="pii-sublabel">redacted</p>
+        <div class="pii-box pii-redacted">${escapeHtml(redactedText || originalText)}</div>
+        <div class="pii-chips">
+          ${piiEntities.map(e =>
+            `<span class="pii-chip">${escapeHtml(e.text)}<span class="pcat">${escapeHtml(e.category)}</span></span>`
+          ).join('')}
+        </div>`;
+    }
+    piiSheet.hidden = false;
+
+    /* ---- summary ---- */
+    summText.textContent = summary || '(no summary returned)';
+    summSheet.hidden = false;
+
     resultsSheet.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   function highlightPhrases(text, phrases) {
     if (!phrases.length) return escapeHtml(text);
-
-    const sorted = [...phrases].sort((a, b) => b.length - a.length);
-    const safe = escapeHtml(text);
-    const escapedPattern = new RegExp(
+    const sorted  = [...phrases].sort((a, b) => b.length - a.length);
+    const safe    = escapeHtml(text);
+    const pattern = new RegExp(
       `(${sorted.map(p => escapeHtml(p).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`,
       'gi'
     );
-
-    return safe.replace(escapedPattern, '<mark>$1</mark>');
+    return safe.replace(pattern, '<mark>$1</mark>');
   }
 
   function escapeHtml(str) {
