@@ -38,10 +38,11 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         entity_doc     = _call_language(endpoint, key, "EntityRecognition",    text)["results"]["documents"][0]
         language_doc   = _call_language(endpoint, key, "LanguageDetection",    text)["results"]["documents"][0]
         pii_doc        = _call_language(endpoint, key, "PiiEntityRecognition", text)["results"]["documents"][0]
-    except Exception:
+    except Exception as exc:
         logging.exception("Azure AI Language call failed")
+        # TEMPORARY: show the real error so we can debug. Remove this before final submission.
         return _json_response(
-            {"error": "Azure AI Language request failed. Check key/endpoint/quota."}, 502
+            {"error": "Azure AI Language request failed.", "debug_detail": str(exc)}, 502
         )
 
     # Abstractive summarization uses a separate async jobs API
