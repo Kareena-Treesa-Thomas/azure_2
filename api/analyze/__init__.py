@@ -7,9 +7,6 @@ import urllib.request
 
 import azure.functions as func
 
-ENDPOINT = os.environ.get("LANGUAGE_ENDPOINT", "").rstrip("/")
-KEY = os.environ.get("LANGUAGE_KEY", "")
-
 API_VERSION = "2023-04-01"
 TIMEOUT_SECONDS = 20
 MAX_CHARS = 5000
@@ -36,11 +33,11 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         return _json_response({"error": f"Text must be {MAX_CHARS} characters or fewer."}, 400)
 
     try:
-        sentiment_doc  = _call_language("SentimentAnalysis",    text)["results"]["documents"][0]
-        keyphrase_doc  = _call_language("KeyPhraseExtraction",  text)["results"]["documents"][0]
-        entity_doc     = _call_language("EntityRecognition",    text)["results"]["documents"][0]
-        language_doc   = _call_language("LanguageDetection",    text)["results"]["documents"][0]
-        pii_doc        = _call_language("PiiEntityRecognition", text)["results"]["documents"][0]
+        sentiment_doc  = _call_language(endpoint, key, "SentimentAnalysis",    text)["results"]["documents"][0]
+        keyphrase_doc  = _call_language(endpoint, key, "KeyPhraseExtraction",  text)["results"]["documents"][0]
+        entity_doc     = _call_language(endpoint, key, "EntityRecognition",    text)["results"]["documents"][0]
+        language_doc   = _call_language(endpoint, key, "LanguageDetection",    text)["results"]["documents"][0]
+        pii_doc        = _call_language(endpoint, key, "PiiEntityRecognition", text)["results"]["documents"][0]
     except Exception:
         logging.exception("Azure AI Language call failed")
         return _json_response(
@@ -50,7 +47,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     # Abstractive summarization uses a separate async jobs API
     summary_text = ""
     try:
-        summary_text = _call_summarization(text)
+        summary_text = _call_summarization(endpoint, key, text)
     except Exception:
         logging.exception("Summarization call failed — continuing without it")
         summary_text = "(Summarization unavailable)"
@@ -80,8 +77,8 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     return _json_response(result, 200)
 
 
-def _call_language(kind: str, text: str) -> dict:
-    url = f"{ENDPOINT}/language/:analyze-text?api-version={API_VERSION}"
+def _call_language(endpoint: str, key: str, kind: str, text: str) -> dict:
+    url = f"{endpoint}/language/:analyze-text?api-version={API_VERSION}"
     payload = {
         "kind": kind,
         "parameters": {"modelVersion": "latest"},
@@ -93,7 +90,7 @@ def _call_language(kind: str, text: str) -> dict:
         data=data,
         headers={
             "Content-Type": "application/json",
-            "Ocp-Apim-Subscription-Key": KEY,
+            "Ocp-Apim-Subscription-Key": key,
         },
         method="POST",
     )
@@ -105,9 +102,9 @@ def _call_language(kind: str, text: str) -> dict:
         raise RuntimeError(f"{kind} failed: {exc.code} {detail}") from exc
 
 
-def _call_summarization(text: str) -> str:
+def _call_summarization(endpoint: str, key: str, text: str) -> str:
     """Submit an abstractive summarization job and poll until done."""
-    submit_url = f"{ENDPOINT}/language/analyze-text/jobs?api-version={API_VERSION}"
+    submit_url = f"{endpoint}/language/analyze-text/jobs?api-version={API_VERSION}"
     payload = {
         "displayName": "summarize",
         "analysisInput": {
@@ -125,7 +122,7 @@ def _call_summarization(text: str) -> str:
         data=data,
         headers={
             "Content-Type": "application/json",
-            "Ocp-Apim-Subscription-Key": KEY,
+            "Ocp-Apim-Subscription-Key": key,
         },
         method="POST",
     )
@@ -144,7 +141,7 @@ def _call_summarization(text: str) -> str:
         time.sleep(2)
         poll_req = urllib.request.Request(
             op_location,
-            headers={"Ocp-Apim-Subscription-Key": KEY},
+            headers={"Ocp-Apim-Subscription-Key": key},
             method="GET",
         )
         with urllib.request.urlopen(poll_req, timeout=TIMEOUT_SECONDS) as resp:
