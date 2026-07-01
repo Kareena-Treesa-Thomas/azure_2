@@ -526,7 +526,8 @@
 
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error || `Request failed (${res.status})`);
+        const detail = errBody.debug_detail ? ` — ${errBody.debug_detail}` : '';
+        throw new Error((errBody.error || `Request failed (${res.status})`) + detail);
       }
 
       const data = await res.json();
