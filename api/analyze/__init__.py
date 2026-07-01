@@ -38,11 +38,10 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         entity_doc     = _call_language(endpoint, key, "EntityRecognition",    text)["results"]["documents"][0]
         language_doc   = _call_language(endpoint, key, "LanguageDetection",    text)["results"]["documents"][0]
         pii_doc        = _call_language(endpoint, key, "PiiEntityRecognition", text)["results"]["documents"][0]
-    except Exception as exc:
+    except Exception:
         logging.exception("Azure AI Language call failed")
-        # TEMPORARY: show the real error so we can debug. Remove this before final submission.
         return _json_response(
-            {"error": "Azure AI Language request failed.", "debug_detail": str(exc)}, 502
+            {"error": "Azure AI Language request failed. Check key/endpoint/quota."}, 502
         )
 
     # Abstractive summarization uses a separate async jobs API
@@ -80,10 +79,18 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
 def _call_language(endpoint: str, key: str, kind: str, text: str) -> dict:
     url = f"{endpoint}/language/:analyze-text?api-version={API_VERSION}"
+
+    if kind == "LanguageDetection":
+        # LanguageDetection does not accept a "language" field — it's what we're detecting.
+        # It optionally accepts "countryHint" instead.
+        document = {"id": "1", "countryHint": "us", "text": text}
+    else:
+        document = {"id": "1", "language": "en", "text": text}
+
     payload = {
         "kind": kind,
         "parameters": {"modelVersion": "latest"},
-        "analysisInput": {"documents": [{"id": "1", "language": "en", "text": text}]},
+        "analysisInput": {"documents": [document]},
     }
     data = json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(
